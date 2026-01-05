@@ -28,7 +28,7 @@ def get_db_connection():
         database=os.getenv("DB_NAME")
     )
 
-# agent logicpython -m venv <directory>
+# agent logic
 @app.post("/recommend")
 def recommend_books(user_prompt: str, genre: str = None):
     connection = get_db_connection()
