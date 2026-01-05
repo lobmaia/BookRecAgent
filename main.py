@@ -4,6 +4,7 @@ import mysql.connector
 import os
 from openai import OpenAI 
 from dotenv import load_dotenv
+import json
 
 load_dotenv()
 
@@ -29,28 +30,66 @@ def get_db_connection():
 
 # agent logicpython -m venv <directory>
 @app.post("/recommend")
-def recommend_books(user_prompt: str):
+def recommend_books(user_prompt: str, genre: str = None):
     connection = get_db_connection()
     try:
         cursor = connection.cursor(dictionary=True)
         
-        # fetching data
-        cursor.execute("SELECT * FROM books WHERE popularity_score < 50")
+        genre_filter = f"AND (tropes LIKE '%{genre}%' OR description LIKE '%{genre}%')" if genre else ""
+
+        query = """
+            SELECT title, author, description, tropes 
+            FROM books 
+            WHERE popularity_score BETWEEN 35 AND 70
+        """
+        params = []
+        
+        # adding genre filter
+        if genre:
+            query += " AND (tropes LIKE %s OR description LIKE %s)"
+            genre_param = f"%{genre}%"
+            params.extend([genre_param, genre_param])
+        
+        query += " ORDER BY RAND() LIMIT 50"
+
+        cursor.execute(query)
         book_pool = cursor.fetchall()
 
-        # passing user's vibe and booklist to the llm
+        if not book_pool:
+            raise HTTPException(status_code=404, detail="No niche books found. Did you run the ingestion script?")
+
+        books_string = json.dumps(book_pool)
+
+        # passing user's vibe and sample pool to the LLM
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "You are a niche book agent. Recommend books based on the user's vibe, specifically avoiding mainstream bestsellers."},
-                {"role": "user", "content": f"User wants: {user_prompt}. Choose from this list: {book_pool}"}
+                {
+                    "role": "system", 
+                    "content": """You are a professional book curator. You must return your response in strictly valid JSON format. The JSON should have these keys: 'book_title', 'author', 'reasoning', and 'vibe_match_score' (1-100). Your tone should be poetic but concise.
+"""
+                },
+                {
+                    "role": "user", 
+                    "content": f"User's Vibe: {user_prompt}. Look through these titles. Even if the description is brief, use your knowledge of these famous works to find the best match: {books_string}"
+                }
             ]
         )
         
         return {"recommendation": response.choices[0].message.content}
     
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         connection.close()
+
+    raw_content = response.choices[0].message.content
+        
+    try:
+        structured_data = json.loads(raw_content)
+        return {"recommendation": structured_data}
+    except:
+        return {"recommendation": raw_content}
 
 # routes
 @app.post("/books/")
