@@ -24,5 +24,5 @@ BookRecAgent/
 ├── .env                # API keys and DB credentials 
 ├── .gitignore          # Prevents sensitive files from being tracked
 ├── books.csv           # Raw Kaggle dataset
-├── data_ingestion.py   # Data pipeline (Log-scaling & Cleaning)
+├── data_ingestion.py   # Data pipeline (Log-scaling and cleaning)
 ├── main.py             # FastAPI endpoints and RAG logic
